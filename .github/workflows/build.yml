@@ -1,0 +1,81 @@
+name: Test, build and publish
+
+# There is no upstream image to follow: the Dockerfile builds on ubuntu:22.04 with a PINNED
+# Wine (see the Dockerfile for why). So a push to main publishes, and the weekly run rebuilds
+# the same pins on a patched Ubuntu base. Publishing :latest does not touch running servers:
+# a Flux app only takes a new image when its spec is updated or it is redeployed.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    # Mondays: the Ubuntu base's security updates, with the same Wine and scripts.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: runonflux/vrising-server-flux
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax
+        run: |
+          for f in scripts/*.sh tests/*.sh; do bash -n "$f"; done
+          python3 -m py_compile scripts/*.py
+
+      # Pinned, so "shellcheck is clean on my machine" means the same thing here.
+      - name: Shellcheck
+        run: docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -x scripts/*.sh tests/*.sh
+
+      - name: Unit tests
+        run: ./tests/test-flux.sh
+
+  build:
+    needs: test
+    # A pull request gets the tests and nothing else: it must not publish.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            FLUX_IMAGE_VERSION=${{ github.sha }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The image must still run the game's tooling it was built for: Wine 10 and its wine64
+      # launcher, SteamCMD, and the scripts. A missing launcher is exactly how an unpinned build
+      # broke every start (exit 127), and it costs nothing to check here.
+      - name: Smoke test the published image
+        run: |
+          docker run --rm --entrypoint bash "${IMAGE_NAME}:${{ github.sha }}" -c '
+            set -e
+            wine --version | grep -q "^wine-10\."
+            command -v wine64 steamcmd Xvfb wineserver python3 >/dev/null
+            python3 /opt/flux/flux-rcon.py >/dev/null 2>&1 || [ $? = 64 ]
+            bash -n /opt/flux/flux-entrypoint.sh
+          '
