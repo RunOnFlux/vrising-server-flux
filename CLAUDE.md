@@ -48,8 +48,13 @@ docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -x scripts/*.s
   keep the CRLF handling when touching it.
 - **RCON answers before the world has loaded.** Anything sent then may fail; never make a
   restart depend on an RCON reply.
+- **No `validate` on the first SteamCMD attempt** (143 s vs 27 s per start); retries validate.
+  Don't put it back unconditionally: every daily restart pays it.
+- **`/entrypoint.sh` is a compatibility symlink.** Hub specs made for the previous image carry
+  `commands` ending in `exec /entrypoint.sh`; removing it breaks those apps.
 - **Flux stops a container with Docker's default 10 seconds** (FluxOS sets no StopTimeout).
-  SIGINT saves within that: 3.7 s with BepInEx mods, 4.7 s without (real server, 2026-09-26).
+  SIGINT saves within that: 3.7 to 6.3 s over four real stops (2026-09-26/27). The margin is
+  not huge; anything added to the stop path has to fit in it.
 - **A stop seconds after the world loads writes no save** (the log has "Finalizing" but not
   "Saving the world on exit!"). Stopped after the first autosave, it always saved. Don't read
   that first case as a broken stop when testing.

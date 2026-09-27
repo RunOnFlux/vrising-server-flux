@@ -37,8 +37,19 @@ RUN echo steam steam/question select "I AGREE" | debconf-set-selections && \
     ln -s /usr/games/steamcmd /usr/bin/steamcmd
 
 COPY scripts/flux-lib.sh scripts/flux-entrypoint.sh scripts/flux-scheduler.sh scripts/flux-rcon.py scripts/flux-bepinex-cfg.py /opt/flux/
+# /entrypoint.sh is the previous image's start command. The games hub wraps it in the spec's
+# `commands` for apps deployed on that image (`bash -c "...; exec /entrypoint.sh"`), and a spec
+# keeps its commands when only the repotag changes, so without this name such an app would not
+# start on this image.
 RUN chmod 0755 /opt/flux/*.sh /opt/flux/*.py && \
-    ln -s /opt/flux/flux-rcon.py /usr/local/bin/flux-rcon
+    ln -s /opt/flux/flux-rcon.py /usr/local/bin/flux-rcon && \
+    ln -s /opt/flux/flux-entrypoint.sh /entrypoint.sh
+
+# SteamCMD's self-update, done once here instead of on every container start: 14 s cold
+# against 2 s warm (measured 2026-09-27), and the weekly rebuild keeps it current.
+# The Wine prefix is NOT baked in: Wine 10 copies its DLLs into it, 1.4 GB on every node's pull
+# to save the 19 s the supervisor spends creating it on a container's first start.
+RUN steamcmd +quit >/dev/null 2>&1; test -d /root/.local/share/Steam
 
 # Wine's own debug channels are noise in the app log (every missing window driver, every
 # unimplemented call); the game's log is what is worth reading.

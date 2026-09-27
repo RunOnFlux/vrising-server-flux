@@ -66,7 +66,7 @@ trap term_handler TERM INT
 # ---------------------------------------------------------------------------------------------
 
 update_server() {
-  local branch_args attempt
+  local branch_args attempt validate
   if [ -n "${SKIP_UPDATE:-}" ] && [ -f "${s}/VRisingServer.exe" ]; then
     flux_log "SKIP_UPDATE is set: not updating the server files"
     return 0
@@ -76,13 +76,19 @@ update_server() {
     return 1
   fi
   flux_log "updating the server from Steam (app ${FLUX_STEAM_APP}, branch ${STEAM_BRANCH})"
+  # No `validate` on the first attempt. It re-hashes the whole 1.9 GB install on every start:
+  # 143 s against 27 s without it, measured on the same install (2026-09-26), and a daily
+  # restart paid it every day. An install that is actually broken fails the first attempt,
+  # and every retry validates.
+  validate=""
   for attempt in 1 2 3 4 5; do
-    # shellcheck disable=SC2086  # branch_args is "" or "-beta <name>", split on purpose
+    # shellcheck disable=SC2086  # branch_args is "" or "-beta <name>", validate "" or "validate"
     if steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir "${s}" +login anonymous \
-      +app_update "${FLUX_STEAM_APP}" ${branch_args} validate +quit; then
+      +app_update "${FLUX_STEAM_APP}" ${branch_args} ${validate} +quit; then
       return 0
     fi
-    flux_log "WARN steamcmd failed (attempt ${attempt}/5); retrying in 5s"
+    validate="validate"
+    flux_log "WARN steamcmd failed (attempt ${attempt}/5); retrying in 5s with validate"
     rm -rf "${s}/steamapps"
     sleep 5
   done
@@ -238,6 +244,12 @@ wait_for_generation() {
 }
 
 while true; do
+  # A stop that arrived during the restart backoff: exit now rather than run a Steam update
+  # that Docker will kill anyway.
+  if [ "${terminating}" = "1" ]; then
+    flux_log "stopped on request before the server started"
+    exit 0
+  fi
   start_generation
   started=$?
   if [ "${started}" = "2" ]; then
@@ -276,5 +288,8 @@ while true; do
   fi
 
   flux_log "${reason}: restarting the server in place in ${FLUX_RESTART_BACKOFF}s"
-  sleep "${FLUX_RESTART_BACKOFF}"
+  # In the background and waited on: bash runs a trap only after a foreground command ends, so a
+  # plain sleep here would hold a stop for the whole backoff, which is Docker's whole deadline.
+  sleep "${FLUX_RESTART_BACKOFF}" &
+  wait $!
 done
