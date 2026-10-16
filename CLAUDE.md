@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A **Docker image repo**, not an application: the V Rising dedicated server for Flux,
-`runonflux/vrising-server-flux`. Ubuntu 22.04, WineHQ Wine (pinned), SteamCMD, and a
-supervisor in bash. Same family as `~/work/palworld-server-flux`, which does this for Palworld;
+`runonflux/vrising-server-flux`. Ubuntu 22.04, Wine 10.0 staging-tkg with fsync (Kron4ek build,
+pinned), SteamCMD, and a supervisor in bash. Same family as `~/work/palworld-server-flux`, which does this for Palworld;
 read it for the patterns this one follows.
 
 The rule that shapes everything: **the container supervises its own server.** PID 1 is
@@ -39,6 +39,11 @@ docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -x scripts/*.s
 - **Wine is pinned** (`WINE_VERSION` in the Dockerfile). An unpinned rebuild pulled Wine 11,
   which has no `wine64` launcher, and every start failed with exit 127. Move it deliberately,
   test on a real server, and keep the CI smoke test in step.
+- **The Wine must have fsync** (since 2026-10-16). WineHQ's Wine routes every thread wait through
+  wineserver; TKG builds from 10.16 on and WineHQ 11 are ntsync-only (needs `/dev/ntsync`, which
+  Flux cannot pass). Wine's output goes to /dev/null, so the proof it is on is a
+  `/dev/shm/wine-*-fsync` file in the running container. Verified with BepInEx 6 + VCF and with
+  the PS5 build (ce-1).
 - **The games hub depends on these paths and names.** It reads the build number from the newest
   `persistentdata/*.log`, detects the server with `pgrep -f VRisingServer.exe`, and its Mods tab
   writes to `/mnt/vrising/mods`. So our own log lives in `persistentdata/flux/`, never next to the

@@ -94,7 +94,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # The image must still run the game's tooling it was built for: Wine 10 and its wine64
+      # The image must still run the game's tooling it was built for: Wine 10 with fsync, its wine64
       # launcher, SteamCMD, and the scripts. A missing launcher is exactly how an unpinned build
       # broke every start (exit 127), and it costs nothing to check here.
       - name: Smoke test the published image
@@ -102,6 +102,7 @@ jobs:
           docker run --rm --entrypoint bash "${IMAGE_NAME}:${{ github.sha }}" -c '
             set -e
             wine --version | grep -q "^wine-10\."
+            wine --version | grep -q "Fsync"
             command -v wine64 steamcmd Xvfb wineserver python3 >/dev/null
             python3 /opt/flux/flux-rcon.py >/dev/null 2>&1 || [ $? = 64 ]
             bash -n /opt/flux/flux-entrypoint.sh

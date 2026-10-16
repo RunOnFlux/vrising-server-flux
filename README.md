@@ -3,7 +3,7 @@
 The V Rising dedicated server image the [Flux](https://runonflux.io/) marketplace and the
 [games hub](https://runonflux.com/games/vrising) deploy: `runonflux/vrising-server-flux`.
 
-It runs the server the usual way on Linux, the Windows `VRisingServer.exe` under WineHQ Wine,
+It runs the server the usual way on Linux, the Windows `VRisingServer.exe` under Wine (10.0 staging-tkg with fsync, see the Dockerfile),
 installed and updated with SteamCMD on every start. It keeps the volumes, paths, settings and
 mod layout of the image the marketplace used before (AndrewSav/vrising-docker), so a server
 can move onto it without touching its files. It was written from scratch rather than forked.
