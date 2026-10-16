@@ -5,7 +5,11 @@
 # SteamCMD on every start, on the same three volumes. What it adds is a supervisor that saves the
 # world on stop, restarts in place, restarts on a schedule, keeps BepInEx's generated files, and
 # can install the PlayStation 5 build (STEAM_BRANCH=ce-1). See README.md.
-FROM ubuntu:22.04
+# The base. CI builds it pinned to the digest it resolved and records that digest in the
+# org.opencontainers.image.base.digest label, which the scheduled check compares against
+# (.github/ci/needs-rebuild.sh).
+ARG BASE_IMAGE=ubuntu:22.04
+FROM ${BASE_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG FLUX_IMAGE_VERSION=dev
@@ -19,6 +23,7 @@ ARG WINE_VERSION=10.0.0.0~jammy-1
 RUN echo steam steam/question select "I AGREE" | debconf-set-selections && \
     echo steam steam/license note '' | debconf-set-selections && \
     apt-get update -y && \
+    apt-get upgrade -y --no-install-recommends && \
     apt-get install -y --no-install-recommends ca-certificates wget gnupg software-properties-common && \
     add-apt-repository -y multiverse && \
     dpkg --add-architecture i386 && \
