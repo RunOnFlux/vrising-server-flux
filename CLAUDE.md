@@ -46,7 +46,8 @@ docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -x scripts/*.s
   the PS5 build (ce-1).
 - **The games hub depends on these paths and names.** It reads the build number from the newest
   `persistentdata/*.log`, detects the server with `pgrep -f VRisingServer.exe`, and its Mods tab
-  writes to `/mnt/vrising/mods`. So our own log lives in `persistentdata/flux/`, never next to the
+  writes to `/mnt/vrising/mods`. So our own log lives in `/var/log/flux/flux.log` (a container path, not a volume: the spec has no
+  `ml:` mount and `persistentdata`/the install are synced; 5 MB then one `.1`), never next to the
   game's logs, and the game log keeps the `<date>-VRisingServer.log` name.
 - **The hub's old BepInEx.cfg sed was broken** (doubled CR after `[IL2CPP]`, so
   `PreloadIL2CPPInteropAssemblies` was never written). `flux-bepinex-cfg.py` repairs that file;
@@ -63,3 +64,5 @@ docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -x scripts/*.s
 - **A stop seconds after the world loads writes no save** (the log has "Finalizing" but not
   "Saving the world on exit!"). Stopped after the first autosave, it always saved. Don't read
   that first case as a broken stop when testing.
+- **`flux_log_migrate` moves an old `persistentdata/flux/flux.log` off the synced volume at start; `flux_banner` prints the FluxCloud banner at container start and every generation (text tested).**
+- **The scheduled CI run publishes only with something to apply** (`.github/ci/needs-rebuild.sh`): urgent security updates, or commits on main since the published `:latest` (label `org.opencontainers.image.revision`) that touch the image inputs; anything else waits for the first Monday of the month. Wine is a pinned tarball, not apt: a Wine security fix is a deliberate `WINE_VERSION` bump.

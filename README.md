@@ -41,6 +41,10 @@ Everything the game reads is unchanged: the `VR_*` variables from Stunlock's
 
 Volumes: `/mnt/vrising/server` (the install), `/mnt/vrising/persistentdata` (settings, saves,
 logs), `/mnt/vrising/mods` (BepInEx and plugins, copied into the install when `ENABLE_MODS` is set).
+Our own supervisor log, `flux.log` (5 MB, then one `.1`), is in `/var/log/flux/`: the marketplace spec has no `ml:`
+mount (the install is `m:`, synced), so it sits on a container path that is not a volume, never synced (lost when
+the container is recreated). An older image's `persistentdata/flux/flux.log` is appended there once and deleted.
+The start-up banner (FluxCloud, runonflux.com/games) is printed at the container start and for every generation.
 
 ## How a stop and a restart work
 

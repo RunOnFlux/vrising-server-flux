@@ -41,6 +41,9 @@ m="${FLUX_MODS_DIR}"
 
 rm -f "${FLUX_RESTART_MARKER}"
 mkdir -p "${p}" "$(dirname "${FLUX_LOG}")"
+# An older image kept flux.log on the synced data volume: move it here, once.
+flux_log_migrate "${p}/flux/flux.log"
+flux_banner "V Rising"
 
 flux_log "flux-entrypoint starting (image ${FLUX_IMAGE_VERSION:-dev}, wine ${FLUX_WINE_VERSION:-unknown}, steam branch ${STEAM_BRANCH})"
 
@@ -195,6 +198,7 @@ start_generation() {
   # persistentdata/*.log.
   log_file="${p}/$(date +%Y%m%d-%H%M%S)-VRisingServer.log"
   : >"${log_file}"
+  flux_banner "V Rising"
   flux_log "starting the server (generation ${generation}), log ${log_file}"
   DISPLAY=:0.0 wine64 "${s}/VRisingServer.exe" -persistentDataPath "${p}" -logFile "${log_file}" >/dev/null 2>&1 &
   game_pid=$!

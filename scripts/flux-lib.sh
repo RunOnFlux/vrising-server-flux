@@ -12,11 +12,15 @@
 FLUX_SERVER_DIR="${FLUX_SERVER_DIR:-/mnt/vrising/server}"
 FLUX_DATA_DIR="${FLUX_DATA_DIR:-/mnt/vrising/persistentdata}"
 FLUX_MODS_DIR="${FLUX_MODS_DIR:-/mnt/vrising/mods}"
-# Our own log sits in a SUBFOLDER on purpose. The hub finds the game's log as the newest
-# `persistentdata/*.log` (it reads the build number out of it), so a log of ours in the same
-# folder would be picked instead of the game's.
-FLUX_LOG="${FLUX_LOG:-${FLUX_DATA_DIR}/flux/flux.log}"
-FLUX_LOG_MAX_LINES="${FLUX_LOG_MAX_LINES:-2000}"
+# Our own log is NOT under persistentdata: the hub finds the game's log as the newest
+# `persistentdata/*.log` (it reads the build number out of it), and that volume is synced.
+# The marketplace spec has no `ml:` mount (the install is `m:`, synced too), so flux.log lives
+# in a plain container path that is not a volume: /var/log/flux.
+# flux.log is on a LOCAL volume, never a synced one: it is written on every line, and on a synced
+# volume that would be constant Syncthing traffic. One rotated copy (flux.log.1).
+FLUX_LOG_DIR="${FLUX_LOG_DIR:-/var/log/flux}"
+FLUX_LOG="${FLUX_LOG-${FLUX_LOG_DIR}/flux.log}"
+FLUX_LOG_MAX_BYTES="${FLUX_LOG_MAX_BYTES:-5242880}"
 # The game's own logs, one per start, named by start time. Nothing ever deleted them.
 FLUX_GAME_LOG_KEEP="${FLUX_GAME_LOG_KEEP:-10}"
 FLUX_GAME_PROCESS="${FLUX_GAME_PROCESS:-VRisingServer.exe}"
@@ -24,23 +28,55 @@ FLUX_STEAM_APP="${FLUX_STEAM_APP:-1829350}"
 FLUX_RCON="${FLUX_RCON:-/opt/flux/flux-rcon.py}"
 FLUX_RESTART_MARKER="${FLUX_RESTART_MARKER:-/tmp/flux-restart-requested}"
 
-flux_log() {
-  local line
-  line="$(date -u '+%Y-%m-%dT%H:%M:%SZ') [flux] $*"
-  printf '%s\n' "${line}"
+# One line, to the container's output and (when FLUX_LOG is set) to flux.log, rotated at
+# FLUX_LOG_MAX_BYTES (the old file becomes flux.log.1).
+flux_log_raw() {
+  printf '%s\n' "$1"
   if [ -n "${FLUX_LOG}" ] && mkdir -p "$(dirname "${FLUX_LOG}")" 2>/dev/null; then
-    printf '%s\n' "${line}" >>"${FLUX_LOG}" 2>/dev/null || return 0
-    flux_trim_file "${FLUX_LOG}" "${FLUX_LOG_MAX_LINES}"
+    printf '%s\n' "$1" >>"${FLUX_LOG}" 2>/dev/null || return 0
+    flux_rotate_log "${FLUX_LOG}" "${FLUX_LOG_MAX_BYTES}"
   fi
+  return 0
 }
 
-# Keeps the last $2 lines of $1. Checked cheaply first: most calls change nothing.
-flux_trim_file() {
-  local file="$1" max="$2" lines
-  lines="$(wc -l <"${file}" 2>/dev/null || echo 0)"
-  if [ "${lines}" -gt $((max + max / 10)) ]; then
-    tail -n "${max}" "${file}" >"${file}.tmp" 2>/dev/null && mv "${file}.tmp" "${file}"
+flux_log() {
+  flux_log_raw "$(date -u '+%Y-%m-%dT%H:%M:%SZ') [flux] $*"
+}
+
+# Moves $1 to $1.1 (replacing the previous one) once it is larger than $2 bytes.
+flux_rotate_log() {
+  local size
+  size="$(stat -c %s "$1" 2>/dev/null || echo 0)"
+  if [ "${size}" -gt "$2" ] 2>/dev/null; then
+    mv -f "$1" "$1.1" 2>/dev/null
   fi
+  return 0
+}
+
+# The start-up banner, through the normal log path (docker logs, the panel's log). ASCII only.
+# $1 = the game's name.
+flux_banner() {
+  local rule='====================================================================='
+  flux_log_raw "${rule}"
+  flux_log_raw " $1 server image by FluxCloud - https://runonflux.com"
+  flux_log_raw " Host this and 30+ other games in one click: https://runonflux.com/games"
+  flux_log_raw "${rule}"
+}
+
+# Once per start: a flux.log an older image left on the synced data volume ($@) is appended to
+# the new one and deleted there, so Syncthing stops carrying it.
+flux_log_migrate() {
+  local old
+  [ -n "${FLUX_LOG}" ] || return 0
+  for old in "$@"; do
+    [ -f "${old}" ] && [ "${old}" != "${FLUX_LOG}" ] || continue
+    mkdir -p "$(dirname "${FLUX_LOG}")" 2>/dev/null
+    if [ -s "${old}" ]; then
+      cat "${old}" >>"${FLUX_LOG}" 2>/dev/null || continue
+    fi
+    rm -f "${old}" "${old}.tmp"
+  done
+  return 0
 }
 
 # ---------------------------------------------------------------------------------------------

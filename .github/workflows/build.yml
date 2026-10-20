@@ -13,8 +13,9 @@ on:
       - main
   pull_request:
   schedule:
-    # Mondays: a check, and a build only when needs-rebuild.sh finds something to apply (an urgent
-    # security update now, anything else on the first Monday of the month).
+    # Mondays: a check, and a build only when needs-rebuild.sh finds something to apply: an urgent
+    # security update, commits on main (touching the image inputs) the published image does not have,
+    # or, on the first Monday of the month, anything else.
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
@@ -50,6 +51,9 @@ jobs:
       base_digest: ${{ steps.check.outputs.base_digest }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The check compares the published image's revision label with this history.
+          fetch-depth: 0
 
       - uses: docker/setup-buildx-action@v3
 
@@ -106,4 +110,8 @@ jobs:
             command -v wine64 steamcmd Xvfb wineserver python3 >/dev/null
             python3 /opt/flux/flux-rcon.py >/dev/null 2>&1 || [ $? = 64 ]
             bash -n /opt/flux/flux-entrypoint.sh
+            # flux.log is on a container path outside every volume, and the banner is printed
+            out="$(bash -c "source /opt/flux/flux-lib.sh; flux_banner \"V Rising\"")"
+            grep -q "V Rising server image by FluxCloud - https://runonflux.com" <<<"${out}"
+            grep -q "Host this and 30+ other games" /var/log/flux/flux.log
           '
