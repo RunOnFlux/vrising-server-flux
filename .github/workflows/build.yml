@@ -107,7 +107,7 @@ jobs:
             set -e
             wine --version | grep -q "^wine-10\."
             wine --version | grep -q "Fsync"
-            command -v wine64 steamcmd Xvfb wineserver python3 >/dev/null
+            command -v wine64 steamcmd Xvfb wineserver python3 curl unzip >/dev/null
             python3 /opt/flux/flux-rcon.py >/dev/null 2>&1 || [ $? = 64 ]
             bash -n /opt/flux/flux-entrypoint.sh
             # flux.log is on a container path outside every volume, and the banner is printed

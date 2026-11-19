@@ -66,3 +66,7 @@ docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -x scripts/*.s
   that first case as a broken stop when testing.
 - **`flux_log_migrate` moves an old `persistentdata/flux/flux.log` off the synced volume at start; `flux_banner` prints the FluxCloud banner at container start and every generation (text tested).**
 - **The scheduled CI run publishes only with something to apply** (`.github/ci/needs-rebuild.sh`): urgent security updates, or commits on main since the published `:latest` (label `org.opencontainers.image.revision`) that touch the image inputs; anything else waits for the first Monday of the month. Wine is a pinned tarball, not apt: a Wine security fix is a deliberate `WINE_VERSION` bump.
+- **The image must keep `curl` and `unzip`.** The games hub's Mods tab installs BepInEx and every
+  Thunderstore mod by running `curl ... && unzip ...` inside the container (appexec); without them
+  every install fails with "BepInEx could not be installed on the server" (found 2026-11-19 on a
+  customer ticket). Never add them to the `apt-get remove` list; the CI smoke test checks `command -v`.

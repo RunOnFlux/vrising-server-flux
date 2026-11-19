@@ -30,6 +30,9 @@ ARG WINE_TKG_SHA256=fe9b45a6ac181c7fe6290ea83e3a6d4abb8ca08d79236ffd95ede5413a9f
 # The libraries Wine loads for a headless server under Xvfb (X11, fonts, TLS, Kerberos for
 # winbind), out of what WineHQ's wine-stable-amd64 depends on and recommends; audio, scanners,
 # cameras, printing and GStreamer are left out.
+# curl and unzip are NOT for the image itself: the games hub's Mods tab installs BepInEx and every
+# Thunderstore mod by running `curl ... && unzip ...` inside this container (appexec). Without them
+# every install answers "BepInEx could not be installed on the server".
 RUN echo steam steam/question select "I AGREE" | debconf-set-selections && \
     echo steam steam/license note '' | debconf-set-selections && \
     apt-get update -y && \
@@ -42,7 +45,7 @@ RUN echo steam steam/question select "I AGREE" | debconf-set-selections && \
         libx11-6 libxext6 libxrender1 libxi6 libxrandr2 libxcursor1 libxcomposite1 libxfixes3 \
         libxinerama1 libxxf86vm1 libxkbcommon0 libgl1 libglu1-mesa libfreetype6 libfontconfig1 \
         libgnutls30 libunwind8 libudev1 libdbus-1-3 libkrb5-3 libgssapi-krb5-2 libpng16-16 \
-        steamcmd winbind xvfb tzdata procps python3-minimal && \
+        steamcmd winbind xvfb tzdata procps python3-minimal curl unzip && \
     pkg="wine-${WINE_VERSION}-staging-tkg-amd64-wow64" && \
     wget -qO "/tmp/${pkg}.tar.xz" \
       "https://github.com/Kron4ek/Wine-Builds/releases/download/${WINE_VERSION}/${pkg}.tar.xz" && \
